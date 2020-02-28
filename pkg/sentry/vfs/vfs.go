@@ -89,6 +89,11 @@ type VirtualFilesystem struct {
 	// anonMount is analogous to Linux's anon_inode_mnt.
 	anonMount *Mount
 
+	// HostFDMount is a Mount, not included in mounts or mountpoints,
+	// representing a host.Filesystem. It is used to back VirtualDentries
+	// for imported host file descriptors.
+	HostFDMount *Mount
+
 	// devices contains all registered Devices. devices is protected by
 	// devicesMu.
 	devicesMu sync.RWMutex `state:"nosave"`
