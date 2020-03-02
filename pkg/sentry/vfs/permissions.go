@@ -15,8 +15,12 @@
 package vfs
 
 import (
+	"math"
+
 	"gvisor.dev/gvisor/pkg/abi/linux"
+	"gvisor.dev/gvisor/pkg/context"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
+	"gvisor.dev/gvisor/pkg/sentry/limits"
 	"gvisor.dev/gvisor/pkg/syserror"
 )
 
@@ -204,4 +208,35 @@ func CanActAsOwner(creds *auth.Credentials, kuid auth.KUID) bool {
 // kernel/capability.c:capable_wrt_inode_uidgid().
 func HasCapabilityOnFile(creds *auth.Credentials, cp linux.Capability, kuid auth.KUID, kgid auth.KGID) bool {
 	return creds.HasCapability(cp) && creds.UserNamespace.MapFromKUID(kuid).Ok() && creds.UserNamespace.MapFromKGID(kgid).Ok()
+}
+
+// CheckLimit enforces file size rlimits. It returns error if the write
+// operation must not proceed. Otherwise it returns the max length allowed to
+// without violating the limit.
+func CheckLimit(ctx context.Context, offset, size int64) (int64, error) {
+	fileSizeLimit := limits.FromContext(ctx).Get(limits.FileSize).Cur
+	if fileSizeLimit > math.MaxInt64 {
+		return size, nil
+	}
+	if offset >= int64(fileSizeLimit) {
+		return 0, syserror.ErrExceedsFileSizeLimit
+	}
+	remaining := int64(fileSizeLimit) - offset
+	if remaining < size {
+		return remaining, nil
+	}
+	return size, nil
+}
+
+// checkLimitStrict enforces file size rlimits. It returns error if
+// (offset + size) violates the size limit.
+func checkLimitStrict(ctx context.Context, offset, size int64) error {
+	limit, err := CheckLimit(ctx, offset, size)
+	if err != nil {
+		return err
+	}
+	if limit < size {
+		return syserror.ErrExceedsFileSizeLimit
+	}
+	return nil
 }

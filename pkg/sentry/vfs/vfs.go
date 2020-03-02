@@ -519,6 +519,12 @@ func (vfs *VirtualFilesystem) RmdirAt(ctx context.Context, creds *auth.Credentia
 
 // SetStatAt changes metadata for the file at the given path.
 func (vfs *VirtualFilesystem) SetStatAt(ctx context.Context, creds *auth.Credentials, pop *PathOperation, opts *SetStatOptions) error {
+	if opts.Stat.Mask&linux.STATX_SIZE != 0 {
+		if err := checkLimitStrict(ctx, 0, int64(opts.Stat.Size)); err != nil {
+			return err
+		}
+	}
+
 	rp := vfs.getResolvingPath(creds, pop)
 	for {
 		err := rp.mount.fs.impl.SetStatAt(ctx, rp, *opts)

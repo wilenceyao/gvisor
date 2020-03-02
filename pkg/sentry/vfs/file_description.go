@@ -466,6 +466,12 @@ func (fd *FileDescription) Stat(ctx context.Context, opts StatOptions) (linux.St
 
 // SetStat updates metadata for the file represented by fd.
 func (fd *FileDescription) SetStat(ctx context.Context, opts SetStatOptions) error {
+	if opts.Stat.Mask&linux.STATX_SIZE != 0 {
+		if err := checkLimitStrict(ctx, 0, int64(opts.Stat.Size)); err != nil {
+			return err
+		}
+	}
+
 	if fd.opts.UseDentryMetadata {
 		vfsObj := fd.vd.mount.vfs
 		rp := vfsObj.getResolvingPath(auth.CredentialsFromContext(ctx), &PathOperation{
