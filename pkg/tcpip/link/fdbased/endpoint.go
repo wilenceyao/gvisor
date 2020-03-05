@@ -407,7 +407,9 @@ func (e *endpoint) WritePacket(r *stack.Route, gso *stack.GSO, protocol tcpip.Ne
 
 	if e.Capabilities()&stack.CapabilityHardwareGSO != 0 {
 		vnetHdr := virtioNetHdr{}
-		vnetHdrBuf := vnetHdrToByteSlice(&vnetHdr)
+		var buf [virtioNetHdrSize]byte
+		vnetHdrBuf := buf[:]
+		vnetHdrToByteSlice(&vnetHdr, &vnetHdrBuf)
 		if gso != nil {
 			vnetHdr.hdrLen = uint16(pkt.Header.UsedLength())
 			if gso.NeedsCsum {

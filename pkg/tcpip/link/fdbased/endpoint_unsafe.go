@@ -23,10 +23,17 @@ import (
 
 const virtioNetHdrSize = int(unsafe.Sizeof(virtioNetHdr{}))
 
-func vnetHdrToByteSlice(hdr *virtioNetHdr) (slice []byte) {
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&slice))
-	sh.Data = uintptr(unsafe.Pointer(hdr))
-	sh.Len = virtioNetHdrSize
-	sh.Cap = virtioNetHdrSize
+// noescape hides a pointer from escape analysis.  noescape is
+// the identity function but escape analysis doesn't think the
+// output depends on the input.
+// USE CAREFULLY!
+//go:nosplit
+func noescape(p unsafe.Pointer) unsafe.Pointer {
+	x := uintptr(p)
+	return unsafe.Pointer(x ^ 0)
+}
+
+func vnetHdrToByteSlice(hdr *virtioNetHdr, slice *[]byte) {
+	((*reflect.SliceHeader)(unsafe.Pointer(slice))).Data = uintptr(noescape(unsafe.Pointer(hdr)))
 	return
 }
