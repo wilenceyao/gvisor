@@ -52,11 +52,12 @@ func (c *context64) SyscallArgs() SyscallArguments {
 // RestartSyscall implements Context.RestartSyscall.
 func (c *context64) RestartSyscall() {
 	c.Regs.Pc -= SyscallWidth
-	c.Regs.Regs[8] = uint64(restartSyscallNr)
+	c.Regs.Regs[0] = uint64(c.OrigR0)
 }
 
 // RestartSyscallWithRestartBlock implements Context.RestartSyscallWithRestartBlock.
 func (c *context64) RestartSyscallWithRestartBlock() {
 	c.Regs.Pc -= SyscallWidth
+	c.Regs.Regs[0] = uint64(c.OrigR0)
 	c.Regs.Regs[8] = uint64(restartSyscallNr)
 }
