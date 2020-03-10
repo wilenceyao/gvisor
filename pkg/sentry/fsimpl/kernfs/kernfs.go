@@ -280,7 +280,7 @@ type Inode interface {
 	inodeRefs
 
 	// Methods related to node metadata. A generic implementation is provided by
-	// InodeAttrs.
+	// InodeAttrsReadonly.
 	inodeMetadata
 
 	// Method for inodes that represent symlink. InodeNotSymlink provides a

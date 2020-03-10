@@ -85,7 +85,7 @@ func newTasksInode(inoGen InoGenerator, k *kernel.Kernel, pidns *kernel.PIDNames
 		threadSelfSymlink: newThreadSelfSymlink(root, inoGen.NextIno(), 0444, pidns).VFSDentry(),
 		cgroupControllers: cgroupControllers,
 	}
-	inode.InodeAttrs.Init(root, inoGen.NextIno(), linux.ModeDirectory|0555)
+	inode.InodeAttrsReadonly.Init(root, inoGen.NextIno(), linux.ModeDirectory|0555)
 
 	dentry := &kernfs.Dentry{}
 	dentry.Init(inode)
@@ -212,7 +212,7 @@ func (i *tasksInode) Open(rp *vfs.ResolvingPath, vfsd *vfs.Dentry, opts vfs.Open
 }
 
 func (i *tasksInode) Stat(vsfs *vfs.Filesystem, opts vfs.StatOptions) (linux.Statx, error) {
-	stat, err := i.InodeAttrs.Stat(vsfs, opts)
+	stat, err := i.InodeAttrsReadonly.Stat(vsfs, opts)
 	if err != nil {
 		return linux.Statx{}, err
 	}

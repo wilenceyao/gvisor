@@ -181,12 +181,12 @@ func (InodeNotSymlink) Readlink(context.Context) (string, error) {
 	return "", syserror.EINVAL
 }
 
-// InodeAttrs partially implements the Inode interface, specifically the
-// inodeMetadata sub interface. InodeAttrs provides functionality related to
+// InodeAttrsReadonly partially implements the Inode interface, specifically the
+// inodeMetadata sub interface. InodeAttrsReadonly provides functionality related to
 // inode attributes.
 //
 // Must be initialized by Init prior to first use.
-type InodeAttrs struct {
+type InodeAttrsReadonly struct {
 	ino   uint64
 	mode  uint32
 	uid   uint32
@@ -194,10 +194,10 @@ type InodeAttrs struct {
 	nlink uint32
 }
 
-// Init initializes this InodeAttrs.
-func (a *InodeAttrs) Init(creds *auth.Credentials, ino uint64, mode linux.FileMode) {
+// Init initializes this InodeAttrsReadonly.
+func (a *InodeAttrsReadonly) Init(creds *auth.Credentials, ino uint64, mode linux.FileMode) {
 	if mode.FileType() == 0 {
-		panic(fmt.Sprintf("No file type specified in 'mode' for InodeAttrs.Init(): mode=0%o", mode))
+		panic(fmt.Sprintf("No file type specified in 'mode' for InodeAttrsReadonly.Init(): mode=0%o", mode))
 	}
 
 	nlink := uint32(1)
@@ -212,14 +212,14 @@ func (a *InodeAttrs) Init(creds *auth.Credentials, ino uint64, mode linux.FileMo
 }
 
 // Mode implements Inode.Mode.
-func (a *InodeAttrs) Mode() linux.FileMode {
+func (a *InodeAttrsReadonly) Mode() linux.FileMode {
 	return linux.FileMode(atomic.LoadUint32(&a.mode))
 }
 
 // Stat partially implements Inode.Stat. Note that this function doesn't provide
 // all the stat fields, and the embedder should consider extending the result
 // with filesystem-specific fields.
-func (a *InodeAttrs) Stat(*vfs.Filesystem, vfs.StatOptions) (linux.Statx, error) {
+func (a *InodeAttrsReadonly) Stat(*vfs.Filesystem, vfs.StatOptions) (linux.Statx, error) {
 	var stat linux.Statx
 	stat.Mask = linux.STATX_TYPE | linux.STATX_MODE | linux.STATX_UID | linux.STATX_GID | linux.STATX_INO | linux.STATX_NLINK
 	stat.Ino = atomic.LoadUint64(&a.ino)
@@ -228,9 +228,18 @@ func (a *InodeAttrs) Stat(*vfs.Filesystem, vfs.StatOptions) (linux.Statx, error)
 	stat.GID = atomic.LoadUint32(&a.gid)
 	stat.Nlink = atomic.LoadUint32(&a.nlink)
 
-	// TODO: Implement other stat fields like timestamps.
+	// TODO(gvisor.dev/issue/1193): Implement other stat fields like timestamps.
 
 	return stat, nil
+}
+
+// SetStat implements Inode.SetStat.
+func (InodeAttrsReadonly) SetStat(_ *vfs.Filesystem, _ vfs.SetStatOptions) error {
+	return syserror.EPERM
+}
+
+type InodeAttrs struct {
+	InodeAttrsReadonly
 }
 
 // SetStat implements Inode.SetStat.
@@ -256,13 +265,13 @@ func (a *InodeAttrs) SetStat(_ *vfs.Filesystem, opts vfs.SetStatOptions) error {
 	// Note that not all fields are modifiable. For example, the file type and
 	// inode numbers are immutable after node creation.
 
-	// TODO: Implement other stat fields like timestamps.
+	// TODO(gvisor.dev/issue/1193): Implement other stat fields like timestamps.
 
 	return nil
 }
 
 // CheckPermissions implements Inode.CheckPermissions.
-func (a *InodeAttrs) CheckPermissions(_ context.Context, creds *auth.Credentials, ats vfs.AccessTypes) error {
+func (a *InodeAttrsReadonly) CheckPermissions(_ context.Context, creds *auth.Credentials, ats vfs.AccessTypes) error {
 	mode := a.Mode()
 	return vfs.GenericCheckPermissions(
 		creds,
@@ -275,14 +284,14 @@ func (a *InodeAttrs) CheckPermissions(_ context.Context, creds *auth.Credentials
 }
 
 // IncLinks implements Inode.IncLinks.
-func (a *InodeAttrs) IncLinks(n uint32) {
+func (a *InodeAttrsReadonly) IncLinks(n uint32) {
 	if atomic.AddUint32(&a.nlink, n) <= n {
 		panic("InodeLink.IncLinks called with no existing links")
 	}
 }
 
 // DecLinks implements Inode.DecLinks.
-func (a *InodeAttrs) DecLinks() {
+func (a *InodeAttrsReadonly) DecLinks() {
 	if nlink := atomic.AddUint32(&a.nlink, ^uint32(0)); nlink == ^uint32(0) {
 		// Negative overflow
 		panic("Inode.DecLinks called at 0 links")
@@ -518,7 +527,7 @@ func (InodeSymlink) Open(rp *vfs.ResolvingPath, vfsd *vfs.Dentry, opts vfs.OpenO
 type StaticDirectory struct {
 	InodeNotSymlink
 	InodeDirectoryNoNewChildren
-	InodeAttrs
+	InodeAttrsReadonly
 	InodeNoDynamicLookup
 	OrderedChildren
 }
@@ -545,7 +554,7 @@ func (s *StaticDirectory) Init(creds *auth.Credentials, ino uint64, perm linux.F
 	if perm&^linux.PermissionsMask != 0 {
 		panic(fmt.Sprintf("Only permission mask must be set: %x", perm&linux.PermissionsMask))
 	}
-	s.InodeAttrs.Init(creds, ino, linux.ModeDirectory|perm)
+	s.InodeAttrsReadonly.Init(creds, ino, linux.ModeDirectory|perm)
 }
 
 // Open implements kernfs.Inode.

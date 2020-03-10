@@ -31,7 +31,7 @@ import (
 )
 
 type selfSymlink struct {
-	kernfs.InodeAttrs
+	kernfs.InodeAttrsReadonly
 	kernfs.InodeNoopRefCount
 	kernfs.InodeSymlink
 
@@ -63,7 +63,7 @@ func (s *selfSymlink) Readlink(ctx context.Context) (string, error) {
 }
 
 type threadSelfSymlink struct {
-	kernfs.InodeAttrs
+	kernfs.InodeAttrsReadonly
 	kernfs.InodeNoopRefCount
 	kernfs.InodeSymlink
 

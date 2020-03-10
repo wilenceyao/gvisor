@@ -32,7 +32,7 @@ import (
 type subtasksInode struct {
 	kernfs.InodeNotSymlink
 	kernfs.InodeDirectoryNoNewChildren
-	kernfs.InodeAttrs
+	kernfs.InodeAttrsReadonly
 	kernfs.OrderedChildren
 
 	task              *kernel.Task
@@ -51,7 +51,7 @@ func newSubtasks(task *kernel.Task, pidns *kernel.PIDNamespace, inoGen InoGenera
 		cgroupControllers: cgroupControllers,
 	}
 	// Note: credentials are overridden by taskOwnedInode.
-	subInode.InodeAttrs.Init(task.Credentials(), inoGen.NextIno(), linux.ModeDirectory|0555)
+	subInode.InodeAttrsReadonly.Init(task.Credentials(), inoGen.NextIno(), linux.ModeDirectory|0555)
 	subInode.OrderedChildren.Init(kernfs.OrderedChildrenOptions{})
 
 	inode := &taskOwnedInode{Inode: subInode, owner: task}
@@ -122,7 +122,7 @@ func (i *subtasksInode) Open(rp *vfs.ResolvingPath, vfsd *vfs.Dentry, opts vfs.O
 
 // Stat implements kernfs.Inode.
 func (i *subtasksInode) Stat(vsfs *vfs.Filesystem, opts vfs.StatOptions) (linux.Statx, error) {
-	stat, err := i.InodeAttrs.Stat(vsfs, opts)
+	stat, err := i.InodeAttrsReadonly.Stat(vsfs, opts)
 	if err != nil {
 		return linux.Statx{}, err
 	}

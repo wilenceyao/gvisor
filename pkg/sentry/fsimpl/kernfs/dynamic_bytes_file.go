@@ -33,7 +33,7 @@ import (
 //
 // +stateify savable
 type DynamicBytesFile struct {
-	InodeAttrs
+	InodeAttrsReadonly
 	InodeNoopRefCount
 	InodeNotDirectory
 	InodeNotSymlink
@@ -48,7 +48,7 @@ func (f *DynamicBytesFile) Init(creds *auth.Credentials, ino uint64, data vfs.Dy
 	if perm&^linux.PermissionsMask != 0 {
 		panic(fmt.Sprintf("Only permission mask must be set: %x", perm&linux.PermissionsMask))
 	}
-	f.InodeAttrs.Init(creds, ino, linux.ModeRegular|perm)
+	f.InodeAttrsReadonly.Init(creds, ino, linux.ModeRegular|perm)
 	f.data = data
 }
 
@@ -59,12 +59,6 @@ func (f *DynamicBytesFile) Open(rp *vfs.ResolvingPath, vfsd *vfs.Dentry, opts vf
 		return nil, err
 	}
 	return &fd.vfsfd, nil
-}
-
-// SetStat implements Inode.SetStat.
-func (f *DynamicBytesFile) SetStat(*vfs.Filesystem, vfs.SetStatOptions) error {
-	// DynamicBytesFiles are immutable.
-	return syserror.EPERM
 }
 
 // DynamicBytesFD implements vfs.FileDescriptionImpl for an FD backed by a
