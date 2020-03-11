@@ -207,5 +207,5 @@ func (fd *GenericDirectoryFD) Stat(ctx context.Context, opts vfs.StatOptions) (l
 func (fd *GenericDirectoryFD) SetStat(ctx context.Context, opts vfs.SetStatOptions) error {
 	fs := fd.filesystem()
 	inode := fd.vfsfd.VirtualDentry().Dentry().Impl().(*Dentry).inode
-	return inode.SetStat(fs, opts)
+	return inode.SetStat(ctx, fs, opts)
 }

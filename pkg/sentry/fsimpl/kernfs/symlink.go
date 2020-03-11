@@ -23,7 +23,7 @@ import (
 // StaticSymlink provides an Inode implementation for symlinks that point to
 // a immutable target.
 type StaticSymlink struct {
-	InodeAttrs
+	InodeAttrsReadonly
 	InodeNoopRefCount
 	InodeSymlink
 
@@ -45,7 +45,7 @@ func NewStaticSymlink(creds *auth.Credentials, ino uint64, target string) *Dentr
 // Init initializes the instance.
 func (s *StaticSymlink) Init(creds *auth.Credentials, ino uint64, target string) {
 	s.target = target
-	s.InodeAttrs.Init(creds, ino, linux.ModeSymlink|0777)
+	s.InodeAttrsReadonly.Init(creds, ino, linux.ModeSymlink|0777)
 }
 
 // Readlink implements Inode.

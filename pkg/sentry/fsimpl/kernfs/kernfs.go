@@ -280,7 +280,7 @@ type Inode interface {
 	inodeRefs
 
 	// Methods related to node metadata. A generic implementation is provided by
-	// InodeAttrs.
+	// InodeAttrsReadonly.
 	inodeMetadata
 
 	// Method for inodes that represent symlink. InodeNotSymlink provides a
@@ -330,8 +330,10 @@ type inodeMetadata interface {
 	Stat(fs *vfs.Filesystem, opts vfs.StatOptions) (linux.Statx, error)
 
 	// SetStat updates the metadata for this inode. This corresponds to
-	// vfs.FilesystemImpl.SetStatAt.
-	SetStat(fs *vfs.Filesystem, opts vfs.SetStatOptions) error
+	// vfs.FilesystemImpl.SetStatAt. Implementations are responsible for checking
+	// if the operation can be performed (see vfs.CheckSetStat() for common
+	// checks).
+	SetStat(ctx context.Context, fs *vfs.Filesystem, opts vfs.SetStatOptions) error
 }
 
 // Precondition: All methods in this interface may only be called on directory

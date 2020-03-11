@@ -25,7 +25,6 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/kernel"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
 	"gvisor.dev/gvisor/pkg/sentry/vfs"
-	"gvisor.dev/gvisor/pkg/syserror"
 )
 
 // Name is the default filesystem name.
@@ -74,7 +73,7 @@ func (FilesystemType) GetFilesystem(ctx context.Context, vfsObj *vfs.VirtualFile
 
 // dir implements kernfs.Inode.
 type dir struct {
-	kernfs.InodeAttrs
+	kernfs.InodeAttrsReadonly
 	kernfs.InodeNoDynamicLookup
 	kernfs.InodeNotSymlink
 	kernfs.InodeDirectoryNoNewChildren
@@ -85,7 +84,7 @@ type dir struct {
 
 func (fs *filesystem) newDir(creds *auth.Credentials, mode linux.FileMode, contents map[string]*kernfs.Dentry) *kernfs.Dentry {
 	d := &dir{}
-	d.InodeAttrs.Init(creds, fs.NextIno(), linux.ModeDirectory|0755)
+	d.InodeAttrsReadonly.Init(creds, fs.NextIno(), linux.ModeDirectory|0755)
 	d.OrderedChildren.Init(kernfs.OrderedChildrenOptions{})
 	d.dentry.Init(d)
 
@@ -94,15 +93,12 @@ func (fs *filesystem) newDir(creds *auth.Credentials, mode linux.FileMode, conte
 	return &d.dentry
 }
 
-// SetStat implements kernfs.Inode.SetStat.
-func (d *dir) SetStat(fs *vfs.Filesystem, opts vfs.SetStatOptions) error {
-	return syserror.EPERM
-}
-
 // Open implements kernfs.Inode.Open.
 func (d *dir) Open(rp *vfs.ResolvingPath, vfsd *vfs.Dentry, opts vfs.OpenOptions) (*vfs.FileDescription, error) {
 	fd := &kernfs.GenericDirectoryFD{}
-	fd.Init(rp.Mount(), vfsd, &d.OrderedChildren, &opts)
+	if err := fd.Init(rp.Mount(), vfsd, &d.OrderedChildren, &opts); err != nil {
+		return nil, err
+	}
 	return fd.VFSFileDescription(), nil
 }
 

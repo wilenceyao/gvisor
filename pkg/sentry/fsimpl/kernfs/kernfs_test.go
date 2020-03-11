@@ -91,7 +91,7 @@ type attrs struct {
 	kernfs.InodeAttrs
 }
 
-func (a *attrs) SetStat(fs *vfs.Filesystem, opt vfs.SetStatOptions) error {
+func (a *attrs) SetStat(ctx context.Context, fs *vfs.Filesystem, opts vfs.SetStatOptions) error {
 	return syserror.EPERM
 }
 

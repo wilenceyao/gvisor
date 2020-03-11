@@ -25,7 +25,6 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
 	"gvisor.dev/gvisor/pkg/sentry/mm"
 	"gvisor.dev/gvisor/pkg/sentry/vfs"
-	"gvisor.dev/gvisor/pkg/syserror"
 )
 
 // taskInode represents the inode for /proc/PID/ directory.
@@ -35,7 +34,7 @@ type taskInode struct {
 	kernfs.InodeNotSymlink
 	kernfs.InodeDirectoryNoNewChildren
 	kernfs.InodeNoDynamicLookup
-	kernfs.InodeAttrs
+	kernfs.InodeAttrsReadonly
 	kernfs.OrderedChildren
 
 	task *kernel.Task
@@ -80,7 +79,7 @@ func newTaskInode(inoGen InoGenerator, task *kernel.Task, pidns *kernel.PIDNames
 
 	taskInode := &taskInode{task: task}
 	// Note: credentials are overridden by taskOwnedInode.
-	taskInode.InodeAttrs.Init(task.Credentials(), inoGen.NextIno(), linux.ModeDirectory|0555)
+	taskInode.InodeAttrsReadonly.Init(task.Credentials(), inoGen.NextIno(), linux.ModeDirectory|0555)
 
 	inode := &taskOwnedInode{Inode: taskInode, owner: task}
 	dentry := &kernfs.Dentry{}
@@ -105,15 +104,6 @@ func (i *taskInode) Open(rp *vfs.ResolvingPath, vfsd *vfs.Dentry, opts vfs.OpenO
 	fd := &kernfs.GenericDirectoryFD{}
 	fd.Init(rp.Mount(), vfsd, &i.OrderedChildren, &opts)
 	return fd.VFSFileDescription(), nil
-}
-
-// SetStat implements kernfs.Inode.
-func (i *taskInode) SetStat(_ *vfs.Filesystem, opts vfs.SetStatOptions) error {
-	stat := opts.Stat
-	if stat.Mask&linux.STATX_MODE != 0 {
-		return syserror.EPERM
-	}
-	return nil
 }
 
 // taskOwnedInode implements kernfs.Inode and overrides inode owner with task

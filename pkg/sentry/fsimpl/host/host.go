@@ -106,7 +106,8 @@ type inode struct {
 	ino uint64
 
 	// mu protects the inode metadata below.
-	mu sync.Mutex
+	// TODO(gvisor.dev/issue/1672): actually protect fields below.
+	//mu sync.Mutex
 
 	// mode is the file mode of this inode. Note that this value may become out
 	// of date if the mode is changed on the host, e.g. with chmod.
@@ -166,16 +167,21 @@ func (i *inode) Stat(_ *vfs.Filesystem, opts vfs.StatOptions) (linux.Statx, erro
 }
 
 // SetStat implements kernfs.Inode.
-func (i *inode) SetStat(_ *vfs.Filesystem, opts vfs.SetStatOptions) error {
+func (i *inode) SetStat(ctx context.Context, fs *vfs.Filesystem, opts vfs.SetStatOptions) error {
 	s := opts.Stat
 
 	m := s.Mask
 	if m == 0 {
 		return nil
 	}
-	if m&(linux.STATX_UID|linux.STATX_GID) != 0 {
+	if m&^(linux.STATX_MODE|linux.STATX_SIZE|linux.STATX_ATIME|linux.STATX_MTIME) != 0 {
 		return syserror.EPERM
 	}
+	creds := auth.CredentialsFromContext(ctx)
+	if err := vfs.CheckSetStat(creds, &s, uint16(i.Mode().Permissions()), i.uid, i.gid); err != nil {
+		return err
+	}
+
 	if m&linux.STATX_MODE != 0 {
 		if err := syscall.Fchmod(i.hostFD, uint32(s.Mode)); err != nil {
 			return err
@@ -271,8 +277,8 @@ type fileDescription struct {
 }
 
 // SetStat implements vfs.FileDescriptionImpl.
-func (f *fileDescription) SetStat(_ context.Context, opts vfs.SetStatOptions) error {
-	return f.inode.SetStat(nil, opts)
+func (f *fileDescription) SetStat(ctx context.Context, opts vfs.SetStatOptions) error {
+	return f.inode.SetStat(ctx, nil, opts)
 }
 
 // Stat implements vfs.FileDescriptionImpl.
