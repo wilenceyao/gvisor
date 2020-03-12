@@ -639,8 +639,9 @@ func TestDADStop(t *testing.T) {
 	const nicID = 1
 
 	tests := []struct {
-		name   string
-		stopFn func(t *testing.T, s *stack.Stack)
+		name            string
+		stopFn          func(t *testing.T, s *stack.Stack)
+		skipNoAddrCheck bool
 	}{
 		// Tests to make sure that DAD stops when an address is removed.
 		{
@@ -660,6 +661,19 @@ func TestDADStop(t *testing.T) {
 					t.Fatalf("DisableNIC(%d): %s", nicID, err)
 				}
 			},
+		},
+
+		// Tests to make sure that DAD stops when the NIC is removed.
+		{
+			name: "Remove NIC",
+			stopFn: func(t *testing.T, s *stack.Stack) {
+				if err := s.RemoveNIC(nicID); err != nil {
+					t.Fatalf("RemoveNIC(%d): %s", nicID, err)
+				}
+			},
+			// The NIC is removed so we can't check its addresses after calling
+			// stopFn.
+			skipNoAddrCheck: true,
 		},
 	}
 
@@ -710,12 +724,15 @@ func TestDADStop(t *testing.T) {
 					t.Errorf("dad event mismatch (-want +got):\n%s", diff)
 				}
 			}
-			addr, err = s.GetMainNICAddress(nicID, header.IPv6ProtocolNumber)
-			if err != nil {
-				t.Fatalf("got stack.GetMainNICAddress(%d, %d) = (_, %v), want = (_, nil)", nicID, header.IPv6ProtocolNumber, err)
-			}
-			if want := (tcpip.AddressWithPrefix{}); addr != want {
-				t.Errorf("got stack.GetMainNICAddress(%d, %d) = (%s, nil), want = (%s, nil)", nicID, header.IPv6ProtocolNumber, addr, want)
+
+			if !test.skipNoAddrCheck {
+				addr, err := s.GetMainNICAddress(nicID, header.IPv6ProtocolNumber)
+				if err != nil {
+					t.Fatalf("got stack.GetMainNICAddress(%d, %d) = (_, %v), want = (_, nil)", nicID, header.IPv6ProtocolNumber, err)
+				}
+				if want := (tcpip.AddressWithPrefix{}); addr != want {
+					t.Errorf("got stack.GetMainNICAddress(%d, %d) = (%s, nil), want = (%s, nil)", nicID, header.IPv6ProtocolNumber, addr, want)
+				}
 			}
 
 			// Should not have sent more than 1 NS message.
@@ -2983,6 +3000,7 @@ func TestCleanupNDPState(t *testing.T) {
 		cleanupFn            func(t *testing.T, s *stack.Stack)
 		keepAutoGenLinkLocal bool
 		maxAutoGenAddrEvents int
+		skipNoAddrCheck      bool
 	}{
 		// A NIC should still keep its auto-generated link-local address when
 		// becoming a router.
@@ -3011,6 +3029,26 @@ func TestCleanupNDPState(t *testing.T) {
 			},
 			keepAutoGenLinkLocal: false,
 			maxAutoGenAddrEvents: 6,
+		},
+
+		// A NIC should cleanup all NDP state when it is removed.
+		{
+			name: "NIC Remove",
+			cleanupFn: func(t *testing.T, s *stack.Stack) {
+				t.Helper()
+
+				if err := s.RemoveNIC(nicID1); err != nil {
+					t.Fatalf("s.RemoveNIC(%d): %s", nicID1, err)
+				}
+				if err := s.RemoveNIC(nicID2); err != nil {
+					t.Fatalf("s.RemoveNIC(%d): %s", nicID2, err)
+				}
+			},
+			keepAutoGenLinkLocal: false,
+			maxAutoGenAddrEvents: 6,
+			// The NICs are removed so we can't check their addresses after calling
+			// stopFn.
+			skipNoAddrCheck: true,
 		},
 	}
 
@@ -3230,35 +3268,37 @@ func TestCleanupNDPState(t *testing.T) {
 				t.Errorf("auto-generated address events mismatch (-want +got):\n%s", diff)
 			}
 
-			// Make sure the auto-generated addresses got removed.
-			nicinfo = s.NICInfo()
-			nic1Addrs = nicinfo[nicID1].ProtocolAddresses
-			nic2Addrs = nicinfo[nicID2].ProtocolAddresses
-			if containsV6Addr(nic1Addrs, llAddrWithPrefix1) != test.keepAutoGenLinkLocal {
-				if test.keepAutoGenLinkLocal {
-					t.Errorf("missing %s from the list of addresses for NIC(%d): %+v", llAddrWithPrefix1, nicID1, nic1Addrs)
-				} else {
-					t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", llAddrWithPrefix1, nicID1, nic1Addrs)
+			if !test.skipNoAddrCheck {
+				// Make sure the auto-generated addresses got removed.
+				nicinfo = s.NICInfo()
+				nic1Addrs = nicinfo[nicID1].ProtocolAddresses
+				nic2Addrs = nicinfo[nicID2].ProtocolAddresses
+				if containsV6Addr(nic1Addrs, llAddrWithPrefix1) != test.keepAutoGenLinkLocal {
+					if test.keepAutoGenLinkLocal {
+						t.Errorf("missing %s from the list of addresses for NIC(%d): %+v", llAddrWithPrefix1, nicID1, nic1Addrs)
+					} else {
+						t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", llAddrWithPrefix1, nicID1, nic1Addrs)
+					}
 				}
-			}
-			if containsV6Addr(nic1Addrs, e1Addr1) {
-				t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", e1Addr1, nicID1, nic1Addrs)
-			}
-			if containsV6Addr(nic1Addrs, e1Addr2) {
-				t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", e1Addr2, nicID1, nic1Addrs)
-			}
-			if containsV6Addr(nic2Addrs, llAddrWithPrefix2) != test.keepAutoGenLinkLocal {
-				if test.keepAutoGenLinkLocal {
-					t.Errorf("missing %s from the list of addresses for NIC(%d): %+v", llAddrWithPrefix2, nicID2, nic2Addrs)
-				} else {
-					t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", llAddrWithPrefix2, nicID2, nic2Addrs)
+				if containsV6Addr(nic1Addrs, e1Addr1) {
+					t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", e1Addr1, nicID1, nic1Addrs)
 				}
-			}
-			if containsV6Addr(nic2Addrs, e2Addr1) {
-				t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", e2Addr1, nicID2, nic2Addrs)
-			}
-			if containsV6Addr(nic2Addrs, e2Addr2) {
-				t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", e2Addr2, nicID2, nic2Addrs)
+				if containsV6Addr(nic1Addrs, e1Addr2) {
+					t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", e1Addr2, nicID1, nic1Addrs)
+				}
+				if containsV6Addr(nic2Addrs, llAddrWithPrefix2) != test.keepAutoGenLinkLocal {
+					if test.keepAutoGenLinkLocal {
+						t.Errorf("missing %s from the list of addresses for NIC(%d): %+v", llAddrWithPrefix2, nicID2, nic2Addrs)
+					} else {
+						t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", llAddrWithPrefix2, nicID2, nic2Addrs)
+					}
+				}
+				if containsV6Addr(nic2Addrs, e2Addr1) {
+					t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", e2Addr1, nicID2, nic2Addrs)
+				}
+				if containsV6Addr(nic2Addrs, e2Addr2) {
+					t.Errorf("still have %s in the list of addresses for NIC(%d): %+v", e2Addr2, nicID2, nic2Addrs)
+				}
 			}
 
 			// Should not get any more events (invalidation timers should have been
@@ -3575,7 +3615,9 @@ func TestStopStartSolicitingRouters(t *testing.T) {
 	tests := []struct {
 		name    string
 		startFn func(t *testing.T, s *stack.Stack)
-		stopFn  func(t *testing.T, s *stack.Stack)
+		// first is used to tell stopFn that it is being called for the first time
+		// after router solicitations were last enabled.
+		stopFn func(t *testing.T, s *stack.Stack, first bool)
 	}{
 		// Tests that when forwarding is enabled or disabled, router solicitations
 		// are stopped or started, respectively.
@@ -3585,7 +3627,7 @@ func TestStopStartSolicitingRouters(t *testing.T) {
 				t.Helper()
 				s.SetForwarding(false)
 			},
-			stopFn: func(t *testing.T, s *stack.Stack) {
+			stopFn: func(t *testing.T, s *stack.Stack, _ bool) {
 				t.Helper()
 				s.SetForwarding(true)
 			},
@@ -3602,11 +3644,30 @@ func TestStopStartSolicitingRouters(t *testing.T) {
 					t.Fatalf("s.EnableNIC(%d): %s", nicID, err)
 				}
 			},
-			stopFn: func(t *testing.T, s *stack.Stack) {
+			stopFn: func(t *testing.T, s *stack.Stack, _ bool) {
 				t.Helper()
 
 				if err := s.DisableNIC(nicID); err != nil {
 					t.Fatalf("s.DisableNIC(%d): %s", nicID, err)
+				}
+			},
+		},
+
+		// Tests that when a NIC is removed, router solicitations are stopped. We
+		// cannot start router solications on a removed NIC.
+		{
+			name: "NIC removed",
+			stopFn: func(t *testing.T, s *stack.Stack, first bool) {
+				t.Helper()
+
+				// Only try to remove the nic the first time stopFn is called since its
+				// impossible to remove an already removed NIC.
+				if !first {
+					return
+				}
+
+				if err := s.RemoveNIC(nicID); err != nil {
+					t.Fatalf("s.RemoveNIC(%d): %s", nicID, err)
 				}
 			},
 		},
@@ -3648,7 +3709,7 @@ func TestStopStartSolicitingRouters(t *testing.T) {
 			}
 
 			// Stop soliciting routers.
-			test.stopFn(t, s)
+			test.stopFn(t, s, true /* first */)
 			ctx, cancel := context.WithTimeout(context.Background(), delay+defaultTimeout)
 			defer cancel()
 			if _, ok := e.ReadContext(ctx); ok {
@@ -3662,11 +3723,16 @@ func TestStopStartSolicitingRouters(t *testing.T) {
 
 			// Stopping router solicitations after it has already been stopped should
 			// do nothing.
-			test.stopFn(t, s)
+			test.stopFn(t, s, false /* first */)
 			ctx, cancel = context.WithTimeout(context.Background(), delay+defaultTimeout)
 			defer cancel()
 			if _, ok := e.ReadContext(ctx); ok {
 				t.Fatal("unexpectedly got a packet after router solicitation has been stopepd")
+			}
+
+			// If test.startFn is nil, there is no way to restart router solications.
+			if test.startFn == nil {
+				return
 			}
 
 			// Start soliciting routers.

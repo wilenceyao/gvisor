@@ -401,6 +401,9 @@ type LinkEndpoint interface {
 
 	// Attach attaches the data link layer endpoint to the network-layer
 	// dispatcher of the stack.
+	//
+	// When the receiver is being detached from NetworkDispatcher, Attach will
+	// be called with a nil dispatcher.
 	Attach(dispatcher NetworkDispatcher)
 
 	// IsAttached returns whether a NetworkDispatcher is attached to the
